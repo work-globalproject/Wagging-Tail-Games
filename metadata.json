@@ -1,0 +1,6 @@
+{
+  "name": "Wagging Tail Games",
+  "description": "Interactive, personalized canine games designed to strengthen the bond between dogs and their owners. Created by Leo Boy Games.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if current user is admin
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'donatasgricius123@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // Users directory:
+    // Any authenticated user can read user documents (needed for admin dashboard stats)
+    // Users can write to their own profile, or admins can update user profiles
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+
+      // Play sessions subcollection
+      match /sessions/{sessionId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // Custom and managed games catalog:
+    // Anyone (even guest players) can read active games
+    // Only authenticated admins can create, update, or delete games
+    match /custom_games/{gameId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

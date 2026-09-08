@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Wagging Tail Games</string>
+    <string name="title_activity_main">Wagging Tail Games</string>
+    <string name="package_name">com.leoboygames.waggingtailgames</string>
+    <string name="custom_url_scheme">com.leoboygames.waggingtailgames</string>
+</resources>

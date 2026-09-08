@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paws & Play Firebase Blueprint",
+  "description": "User accounts, admin roles, app usage metrics, games catalog management, dog profile synchronization, and saved game play sessions.",
+  "entities": {
+    "users": {
+      "title": "Users",
+      "description": "User account details, role (admin or pet_parent), app usage stats, and synced dog profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "provider": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "pet_parent"] },
+        "dogProfile": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastActiveAt": { "type": "string" },
+        "sessionCount": { "type": "number" },
+        "totalPlaySeconds": { "type": "number" }
+      },
+      "required": ["email", "displayName", "createdAt"]
+    },
+    "sessions": {
+      "title": "Saved Game Sessions",
+      "description": "Recorded play sessions with duration, rating, XP, and notes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "gameId": { "type": "string" },
+        "gameTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "dogRating": { "type": "number" },
+        "notes": { "type": "string" },
+        "dogName": { "type": "string" },
+        "xpEarned": { "type": "number" }
+      },
+      "required": ["userId", "gameId", "gameTitle", "completedAt"]
+    },
+    "custom_games": {
+      "title": "Managed Games",
+      "description": "Custom games managed by admin, added, edited, or disabled",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "category": { "type": "string", "enum": ["curiosity", "problem_solving", "agility"] },
+        "energyLevel": { "type": "string", "enum": ["low", "medium", "high"] },
+        "environment": { "type": "string", "enum": ["indoor", "outdoor", "both"] },
+        "durationMinutes": { "type": "number" },
+        "skillBuilds": { "type": "array" },
+        "suitableSizes": { "type": "array" },
+        "primaryMotivations": { "type": "array" },
+        "nonFoodAlternative": { "type": "string" },
+        "materials": { "type": "array" },
+        "steps": { "type": "array" },
+        "bondTip": { "type": "string" },
+        "funnyQuote": { "type": "string" },
+        "illustrationKey": { "type": "string" },
+        "isSecret": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "category", "energyLevel", "durationMinutes"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Public user directory for app usage stats & admin role authorization"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "sessions",
+      "description": "Personal play sessions recorded by user"
+    },
+    "/custom_games/{gameId}": {
+      "schema": "custom_games",
+      "description": "Public catalog of admin created and managed games"
+    }
+  }
+}

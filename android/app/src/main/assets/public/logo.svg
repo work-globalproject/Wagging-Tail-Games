@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 440" width="400" height="440">
+  <!-- Motion wag swooshes -->
+  <g>
+    <path d="M 95 110 C 120 70, 170 45, 215 55" fill="none" stroke="#40B3C9" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+    <path d="M 125 145 C 150 115, 190 100, 230 108" fill="none" stroke="#184D7A" stroke-width="8" stroke-linecap="round" opacity="0.75" />
+    <path d="M 315 80 C 355 110, 370 155, 360 200" fill="none" stroke="#40B3C9" stroke-width="11" stroke-linecap="round" opacity="0.9" />
+    <path d="M 340 125 C 370 155, 375 195, 362 230" fill="none" stroke="#184D7A" stroke-width="8" stroke-linecap="round" opacity="0.75" />
+  </g>
+
+  <!-- Golden Fluffy Wagging Dog Tail -->
+  <g>
+    <!-- Base Saffron Orange Silhouette -->
+    <path d="M 80 345 
+             C 96 295, 170 245, 235 200
+             C 268 175, 292 125, 302 80
+             C 312 135, 302 175, 332 185
+             C 318 225, 332 252, 345 272
+             C 322 292, 312 318, 322 345
+             C 295 342, 270 355, 262 375
+             C 238 352, 198 345, 182 365
+             C 152 342, 125 342, 110 352
+             C 90 348, 82 346, 80 345 Z"
+          fill="#FF7C00"
+          stroke="#184D7A"
+          stroke-width="17"
+          stroke-linejoin="round"
+          stroke-linecap="round" />
+
+    <!-- Papaya Orange highlights on upper fur fluffs -->
+    <path d="M 105 328 
+             C 150 282, 210 230, 260 195
+             C 285 174, 298 130, 302 82
+             C 308 120, 300 155, 320 165
+             C 292 190, 265 232, 232 268
+             C 182 312, 142 330, 105 328 Z"
+          fill="#FFB82E" />
+
+    <!-- White Fur Highlights -->
+    <path d="M 242 210 C 260 230, 280 245, 296 250" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity="0.8" />
+  </g>
+
+  <!-- Typography: WAGGING TAIL GAMES in Ocean Teal -->
+  <text x="200" y="405" text-anchor="middle" font-family="'Fredoka', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="700" font-size="34" fill="#184D7A" letter-spacing="1">WAGGING TAIL GAMES</text>
+</svg>
