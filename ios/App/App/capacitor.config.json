@@ -15,5 +15,11 @@
 			"splashImmersive": true
 		}
 	},
-	"packageClassList": []
+	"packageClassList": [
+		"AppPlugin",
+		"FilesystemPlugin",
+		"LocalNotificationsPlugin",
+		"PreferencesPlugin",
+		"SharePlugin"
+	]
 }

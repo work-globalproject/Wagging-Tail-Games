@@ -3,6 +3,7 @@ import { Game, DogProfile, PlaySession } from '../types';
 import { X, Video, Camera, StopCircle, RotateCcw, Share2, Sparkles, Check, Heart, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { soundFx } from '../utils/audio';
+import { exportMedia } from '../lib/device';
 
 interface Props {
   game: Game | null;
@@ -39,24 +40,67 @@ export const PlayCamModal: React.FC<Props> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStarted = useRef(0);
 
   useEffect(() => {
-    if (isOpen) {
-      startCamera();
-    } else {
-      stopCamera();
+    let cancelled = false;
+    let activeStream: MediaStream | null = null;
+    if (!isOpen) {
+      setStream(null);
       setCapturedMedia(null);
       setIsRecording(false);
       setRecordSeconds(0);
       setShareSuccess(false);
+      return;
     }
+    setCameraError(null);
+    const openCamera = async () => {
+      try {
+        const media = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        if (cancelled) {
+          media.getTracks().forEach(track => track.stop());
+          return;
+        }
+        activeStream = media;
+        setStream(media);
+        if (videoRef.current) videoRef.current.srcObject = media;
+      } catch (error) {
+        if (!cancelled) {
+          setCameraError('Camera access is unavailable. Check app permissions in Settings, or upload a photo.');
+        }
+      }
+    };
+    void openCamera();
+    return () => {
+      cancelled = true;
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
+      mediaRecorderRef.current = null;
+      activeStream?.getTracks().forEach(track => track.stop());
+    };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!capturedMedia && stream && videoRef.current) videoRef.current.srcObject = stream;
+    return () => {
+      if (capturedMedia?.url.startsWith('blob:')) URL.revokeObjectURL(capturedMedia.url);
+    };
+  }, [capturedMedia, stream]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     if (isRecording) {
       timer = setInterval(() => {
-        setRecordSeconds((s) => s + 1);
+        const seconds = Math.floor((Date.now() - recordingStarted.current) / 1000);
+        setRecordSeconds(Math.min(60, seconds));
+        if (seconds >= 60) handleStopRecording();
       }, 1000);
     }
     return () => {
@@ -64,60 +108,39 @@ export const PlayCamModal: React.FC<Props> = ({
     };
   }, [isRecording]);
 
-  const startCamera = async () => {
-    try {
-      setCameraError(null);
-      const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true,
-      });
-      setStream(media);
-      if (videoRef.current) {
-        videoRef.current.srcObject = media;
-      }
-    } catch (err) {
-      console.warn('Camera access unavailable or declined:', err);
-      setCameraError('Camera access not available in this preview iframe. You can still test with simulated dog snapshots or upload your own!');
-    }
-  };
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      setStream(null);
-    }
-  };
-
   const handleStartRecording = () => {
-    if (!stream) {
-      // Simulate recording if no physical camera
-      setIsRecording(true);
-      setRecordSeconds(0);
-      soundFx.playWhistleStart();
+    if (!stream?.active) {
+      setCameraError('Enable camera access before recording, or upload a photo.');
       return;
     }
 
     try {
       recordedChunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, { videoBitsPerSecond: 1_500_000 });
+      let bytes = 0;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           recordedChunksRef.current.push(e.data);
+          bytes += e.data.size;
+          if (bytes > 15 * 1024 * 1024 && recorder.state === 'recording') recorder.stop();
         }
       };
       recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        setIsRecording(false);
+        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType });
         const videoUrl = URL.createObjectURL(blob);
         setCapturedMedia({ type: 'video', url: videoUrl });
       };
-      recorder.start();
+      recordingStarted.current = Date.now();
+      recorder.start(1000);
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordSeconds(0);
       soundFx.playWhistleStart();
     } catch (err) {
       console.error(err);
-      setIsRecording(true);
+      setCameraError('Video recording is unavailable on this device. You can still take or upload a photo.');
+      setIsRecording(false);
     }
   };
 
@@ -128,64 +151,6 @@ export const PlayCamModal: React.FC<Props> = ({
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-    } else if (!capturedMedia) {
-      // Fallback preview
-      setCapturedMedia({
-        type: 'video',
-        url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&auto=format&fit=crop',
-      });
-    }
-  };
-
-  const handleTakeSnapshot = () => {
-    soundFx.playBoop(750);
-    if (videoRef.current && stream) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const photoUrl = canvas.toDataURL('image/jpeg');
-        setCapturedMedia({ type: 'photo', url: photoUrl });
-        soundFx.playFanfare();
-        confetti({ particleCount: 50, spread: 50 });
-        return;
-      }
-    }
-    // Fallback cute snapshot
-    setCapturedMedia({
-      type: 'photo',
-      url: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop',
-    });
-    soundFx.playFanfare();
-    confetti({ particleCount: 50, spread: 50 });
-  };
-
-  const handleSimulatedPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) {
-          setCapturedMedia({ type: 'photo', url: reader.result as string });
-          soundFx.playFanfare();
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleShareAndUnlock = () => {
-    soundFx.playFanfare();
-    setShareSuccess(true);
-    confetti({
-      particleCount: 120,
-      spread: 90,
-      origin: { y: 0.5 },
-    });
-    if (onUnlockSecretGame) {
-      onUnlockSecretGame();
     }
   };
 
@@ -198,14 +163,42 @@ export const PlayCamModal: React.FC<Props> = ({
       category: game.category,
       dogId: dogProfile.id,
       dogName: dogProfile.name,
-      durationSeconds: recordSeconds > 0 ? recordSeconds : 90,
+      durationSeconds: recordSeconds,
       mode: 'video',
       timestamp: new Date().toISOString(),
-      photoOrVideoUrl: capturedMedia?.url,
       rating: 5,
     };
     onSessionComplete(session);
     onClose();
+  };
+
+  const handleTakeSnapshot = () => {
+    const video = videoRef.current;
+    if (!stream?.active || !video?.videoWidth) { setCameraError('The camera is not ready. Select a photo or check camera permissions.'); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    setCapturedMedia({ type: 'photo', url: canvas.toDataURL('image/jpeg', .85) });
+  };
+
+  const handleSimulatedPhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setCameraError('Choose a JPEG, PNG or WebP image smaller than 10 MB.'); return;
+    }
+    setCapturedMedia({ type: 'photo', url: URL.createObjectURL(file) });
+    setCameraError(null);
+  };
+
+  const handleShareAndUnlock = async () => {
+    if (!capturedMedia) return;
+    try {
+      const blob = await (await fetch(capturedMedia.url)).blob();
+      const extension = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : capturedMedia.type === 'video' ? 'webm' : 'jpg';
+      await exportMedia(blob, `play-moment.${extension}`, 'Our play moment');
+      setShareSuccess(true);
+    } catch { setCameraError('Export was cancelled or could not finish. Please try again.'); }
   };
 
   if (!isOpen || !game) return null;
@@ -213,7 +206,7 @@ export const PlayCamModal: React.FC<Props> = ({
   const currentSticker = STICKERS.find((s) => s.id === activeSticker);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Play Cam" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div 
         id="play-cam-modal"
         className="relative w-full max-w-xl bg-stone-950 rounded-3xl shadow-2xl border border-stone-800 text-white overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200"
@@ -227,7 +220,7 @@ export const PlayCamModal: React.FC<Props> = ({
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={onClose} aria-label="Close"
             className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-stone-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -253,10 +246,10 @@ export const PlayCamModal: React.FC<Props> = ({
                   <div className="text-4xl">🐕📷</div>
                   <div className="text-xs font-semibold text-amber-300 flex items-center gap-1.5 max-w-sm">
                     <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                    <span>Live camera preview blocked by sandbox</span>
+                    <span>Camera unavailable</span>
                   </div>
                   <p className="text-[11px] text-stone-300 max-w-xs leading-relaxed">
-                    You can snap a demo puppy photo or upload your real dog picture to record this session and unlock viral rewards!
+                    {cameraError}
                   </p>
                   <div className="flex items-center gap-2 pt-1">
                     <label className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs cursor-pointer transition-colors flex items-center gap-1.5">
@@ -264,18 +257,11 @@ export const PlayCamModal: React.FC<Props> = ({
                       <span>Upload Pup Photo</span>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp"
                         onChange={handleSimulatedPhotoUpload}
                         className="hidden"
                       />
                     </label>
-                    <button
-                      type="button"
-                      onClick={handleTakeSnapshot}
-                      className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs transition-colors"
-                    >
-                      Use Demo Photo
-                    </button>
                   </div>
                 </div>
               )}
@@ -299,7 +285,7 @@ export const PlayCamModal: React.FC<Props> = ({
           ) : (
             /* Review captured photo or video */
             <div className="relative w-full h-full">
-              {capturedMedia.type === 'video' && capturedMedia.url.endsWith('.webm') ? (
+              {capturedMedia.type === 'video' && capturedMedia.url.startsWith('blob:') ? (
                 <video
                   src={capturedMedia.url}
                   controls
@@ -324,6 +310,7 @@ export const PlayCamModal: React.FC<Props> = ({
 
         {/* Controls Section */}
         <div className="p-5 space-y-4">
+          {capturedMedia && cameraError && <p role="status" className="text-sm text-amber-200">{cameraError}</p>}
           {!capturedMedia ? (
             <>
               {/* Sticker Selector */}
@@ -363,7 +350,7 @@ export const PlayCamModal: React.FC<Props> = ({
                       className="flex-1 py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md"
                     >
                       <Video className="w-4 h-4" />
-                      <span>Record Video</span>
+                      <span>Record · up to 60s</span>
                     </button>
 
                     <button
@@ -396,10 +383,10 @@ export const PlayCamModal: React.FC<Props> = ({
                 <div>
                   <h4 className="font-bold text-amber-300 text-xs sm:text-sm flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-400" />
-                    Share This Moment to Unlock Secret Games!
+                    Keep this play moment
                   </h4>
                   <p className="text-[11px] text-amber-200/80 mt-0.5">
-                    Show the world {dogProfile.name} in action and unlock "The Magic Sheet Ghost Tunnel"!
+                    Save or share before closing. Photos and silent videos stay private and are not included in cloud history. Stickers are preview decorations.
                   </p>
                 </div>
                 <button
@@ -408,14 +395,14 @@ export const PlayCamModal: React.FC<Props> = ({
                   className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs shrink-0 flex items-center gap-1.5 transition-colors shadow-xs"
                 >
                   <Share2 className="w-3.5 h-3.5" />
-                  <span>{shareSuccess ? 'Shared! 🎉' : 'Share & Unlock'}</span>
+                  <span>{shareSuccess ? 'Export again' : 'Save / Share'}</span>
                 </button>
               </div>
 
               {shareSuccess && (
                 <div className="bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 p-3 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2">
                   <Check className="w-4 h-4 text-emerald-400" />
-                  <span>Unlocked! Bonus games are now active in your game catalog!</span>
+                  <span>Export finished. Activity history stores the session details only.</span>
                 </div>
               )}
 

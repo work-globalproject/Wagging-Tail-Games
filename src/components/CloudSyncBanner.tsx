@@ -28,14 +28,11 @@ export default function CloudSyncBanner({ dogName = 'your pup', sessionsCount, o
             Save {dogName}'s Play Sessions & Streaks
           </h3>
           <p className="text-xs text-white/90 max-w-md leading-relaxed">
-            Create an account with <strong>Google, Facebook, Instagram</strong> or <strong>Email</strong> to back up your {sessionsCount > 0 ? `${sessionsCount} recorded sessions` : 'sessions'} safely across any phone or device.
+            Create an account with your email to back up your {sessionsCount > 0 ? `${sessionsCount} recorded sessions` : 'sessions'} safely across any phone or device.
           </p>
 
           {/* Supported Brand Badges */}
           <div className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-white/95">
-            <span className="bg-white/15 px-2 py-0.5 rounded-lg">Google</span>
-            <span className="bg-white/15 px-2 py-0.5 rounded-lg">Facebook</span>
-            <span className="bg-white/15 px-2 py-0.5 rounded-lg">Instagram</span>
             <span className="bg-white/15 px-2 py-0.5 rounded-lg">Email</span>
           </div>
         </div>

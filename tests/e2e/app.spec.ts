@@ -1,0 +1,58 @@
+import { test, expect, Page } from '@playwright/test';
+async function onboard(page: Page, name: string) {
+  await expect(page.locator('#onboarding-flow-container')).toBeVisible();
+  await page.locator('#onboarding-dog-name-input').fill(name);
+  for (let step = 0; step < 4; step++) await page.locator('#onboarding-next-btn').click();
+  await expect(page.locator('#mobile-bottom-nav')).toBeVisible();
+}
+test('guest can play, keep history, use keyboard dismissal and open privacy on an iPhone-sized screen', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await onboard(page, 'Pixel');
+  await expect(page.locator('#top-streak-chip')).toContainText('0');
+  await page.context().setOffline(true);
+  await page.locator('#play-timer-btn-snuffle-mat-dig').click();
+  await expect(page.locator('#play-timer-modal')).toBeVisible();
+  await page.waitForTimeout(1200);
+  await page.getByRole('button', { name: 'Finish Early!' }).click();
+  await page.locator('#save-timer-session-btn').click();
+  await page.locator('#bottom-nav-activity').click();
+  await expect(page.locator('#activity-tracking-section')).toContainText('1 Game');
+  await page.context().setOffline(false);
+  await page.reload();
+  await expect(page.locator('#top-profile-chip')).toHaveAttribute('aria-label', "Edit Pixel's profile");
+  await page.locator('#top-signin-btn').click();
+  await expect(page.getByRole('dialog', { name: 'Welcome back' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Privacy', exact: true }).click();
+  await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Your play. Your privacy.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close help' }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: 'test-results/v1-iphone-games.png' });
+  expect(errors).toEqual([]);
+});
+test('account sign-in isolates guest history, imports explicitly, and deletes the account', async ({ page }) => {
+  await page.goto('/'); await onboard(page, 'Guest Pup');
+  await page.locator('#top-signin-btn').click();
+  await page.getByRole('button', { name: 'Create account', exact: true }).first().click();
+  const email = `v1-${Date.now()}@example.test`;
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('Playtime123!');
+  await page.getByRole('button', { name: 'Create account', exact: true }).last().click();
+  await onboard(page, 'Cloud Pup');
+  await page.locator('#top-account-chip').click();
+  await page.getByRole('button', { name: "Import this device's guest history" }).click();
+  await expect(page.getByRole('dialog', { name: 'Account' })).toContainText('Cloud Pup');
+  await page.getByRole('button', { name: 'Delete account and cloud data' }).click();
+  await page.getByLabel('Confirm your password').fill('Playtime123!');
+  await page.getByRole('button', { name: 'Permanently delete my account' }).click();
+  await expect(page.locator('#top-signin-btn')).toBeVisible();
+  await expect(page.locator('#top-profile-chip')).toHaveAttribute('aria-label', "Edit Guest Pup's profile");
+  await page.locator('#top-signin-btn').click();
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('Playtime123!');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
+  await expect(page.getByRole('status')).toContainText('could not complete');
+});

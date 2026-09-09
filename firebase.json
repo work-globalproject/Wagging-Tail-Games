@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "database": "ai-studio-pawsplay-75e8da89-21a3-4977-860d-515b475e16b6",
+    "rules": "firestore.rules"
+  }
+}

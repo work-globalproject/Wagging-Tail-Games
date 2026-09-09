@@ -1,0 +1,33 @@
+import React from 'react';
+import { render, fireEvent, screen, act, cleanup } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
+vi.mock('../src/utils/audio', () => ({ soundFx: { playWhistleStart: vi.fn(), playFanfare: vi.fn(), playBoop: vi.fn() } }));
+import { PlayTimerModal } from '../src/components/PlayTimerModal';
+import { GAMES_DATA } from '../src/data/games';
+import { emptyPlayerData } from '../src/lib/playerData';
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+it('counts elapsed wall time after background suspension and saves it once', () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-09T12:00:00Z'));
+  const save = vi.fn();
+  render(<PlayTimerModal game={GAMES_DATA[0]} dogProfile={{ ...emptyPlayerData().profile, name: 'Pixel' }} isOpen onClose={() => {}} onSessionComplete={save} />);
+  act(() => { vi.setSystemTime(new Date('2026-09-09T12:00:30Z')); document.dispatchEvent(new Event('visibilitychange')); });
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Early!' }));
+  fireEvent.click(screen.getByRole('button', { name: "Log to Pixel's Activity Tally" }));
+  expect(save).toHaveBeenCalledOnce(); expect(save.mock.calls[0][0].durationSeconds).toBe(30);
+});
+it('stops ticking when the modal closes and resets notes on a new session', () => {
+  vi.useFakeTimers(); const save = vi.fn();
+  const props = { game: GAMES_DATA[0], dogProfile: { ...emptyPlayerData().profile, name: 'Pixel' }, onClose: () => {}, onSessionComplete: save };
+  const { rerender } = render(<PlayTimerModal {...props} isOpen />);
+  act(() => { vi.advanceTimersByTime(3000); });
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Early!' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Old note' } });
+  rerender(<PlayTimerModal {...props} isOpen={false} />);
+  act(() => { vi.advanceTimersByTime(60_000); });
+  rerender(<PlayTimerModal {...props} isOpen />);
+  fireEvent.click(screen.getByRole('button', { name: 'Finish Early!' }));
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
+  fireEvent.click(screen.getByRole('button', { name: "Log to Pixel's Activity Tally" }));
+  expect(save.mock.calls[0][0].durationSeconds).toBe(0);
+});

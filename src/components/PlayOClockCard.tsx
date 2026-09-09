@@ -17,7 +17,7 @@ export const PlayOClockCard: React.FC<Props> = ({
   onOpenReminderSettings,
 }) => {
   const [hasPlayedChime, setHasPlayedChime] = useState(false);
-  const streak = dogProfile.streakCount || 1;
+  const streak = dogProfile.streakCount || 0;
   const goal = dogProfile.dailyGoalGames || 2;
   const isGoalMet = todaySessionsCount >= goal;
   const playTime = dogProfile.playOClockTime || '17:30';
@@ -62,12 +62,12 @@ export const PlayOClockCard: React.FC<Props> = ({
             {isGoalMet
               ? `Daily Goal Smashed! 🎉`
               : todaySessionsCount > 0
-              ? `1 more game for today's goal!`
+              ? `${Math.max(0, goal - todaySessionsCount)} more for today's goal!`
               : `Time for ${dogProfile.name}'s daily 10 min!`}
           </h3>
           <p className="text-xs text-white/85 mt-1">
             {isGoalMet
-              ? `${dogProfile.name}'s mind & body are fully stimulated. Keep the streak rolling tomorrow!`
+              ? `${dogProfile.name}'s daily play goal is complete. Make time for rest and water too!`
               : `A consistent daily play ritual deepens trust and burns mental energy.`}
           </p>
         </div>

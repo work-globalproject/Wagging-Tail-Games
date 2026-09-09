@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { usePlayerData } from './hooks/usePlayerData';
+import { playStreak, localDay } from './lib/playerData';
+import { ReminderControl } from './components/ReminderControl';
+import { useModalAccessibility } from './hooks/useModalAccessibility';
+import { InformationModal } from './components/InformationModal';
 import { Game, DogProfile, PlaySession, FilterOptions, EnergyLevel, Environment, UserAccount } from './types';
 import { GAMES_DATA } from './data/games';
 import { GameCard } from './components/GameCard';
@@ -14,21 +19,22 @@ import { PlayCamModal } from './components/PlayCamModal';
 import { DogProfileModal } from './components/DogProfileModal';
 import { SurpriseModal } from './components/SurpriseModal';
 import { StatsDashboard } from './components/StatsDashboard';
-import { ShareCardModal } from './components/ShareCardModal';
+
 import { StoryShareModal } from './components/StoryShareModal';
 import { OnboardingFlow } from './components/OnboardingFlow';
 import { PlayOClockCard } from './components/PlayOClockCard';
 import CloudSyncBanner from './components/CloudSyncBanner';
 import AuthModal from './components/AuthModal';
 import AccountModal from './components/AccountModal';
-import AdminUsersDashboard from './components/AdminUsersDashboard';
-import AdminGamesManager from './components/AdminGamesManager';
+const AdminUsersDashboard = lazy(() => import('./components/AdminUsersDashboard'));
+const AdminGamesManager = lazy(() => import('./components/AdminGamesManager'));
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import WaggingTailLogo from './components/WaggingTailLogo';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   auth,
+  logOutUser,
   mapFirebaseUser,
   isUserAdmin,
   saveDogProfileToCloud,
@@ -62,103 +68,37 @@ import {
 } from 'lucide-react';
 import { soundFx } from './utils/audio';
 
-const STORAGE_PROFILE_KEY = 'paws_and_play_dog_profile';
-const STORAGE_SESSIONS_KEY = 'paws_and_play_sessions';
-const STORAGE_UNLOCKED_KEY = 'paws_and_play_unlocked_bonus';
-
-const DEFAULT_PROFILE: DogProfile = {
-  id: 'dog-1',
-  name: '',
-  breed: '',
-  size: 'medium',
-  energyLevel: 'high',
-  isFoodMotivated: false, // Default active non-food dog based on prompt
-  motivations: ['toys_fetch', 'chase_speed', 'tug', 'praise_affection'],
-  avatarEmoji: '🐕',
-  playOClockTime: '17:30',
-  dailyGoalGames: 2,
-  streakCount: 3,
-  hasCompletedOnboarding: false, // Triggers mobile onboarding wizard first
-  createdAt: new Date().toISOString(),
-};
-
-const DEFAULT_SESSIONS: PlaySession[] = [
-  {
-    id: 'sample-1',
-    gameId: 'broomstick-limbo-hurdles',
-    gameTitle: 'Broomstick Limbo & Hurdles',
-    category: 'agility',
-    dogId: 'dog-1',
-    dogName: 'Barnaby',
-    durationSeconds: 480,
-    mode: 'timer',
-    timestamp: new Date().toISOString(),
-    rating: 5,
-    notes: 'Cleared all three jumps like a champ!',
-  },
-  {
-    id: 'sample-2',
-    gameId: 'snuffle-mat-dig',
-    gameTitle: 'Snuffle Mat Treasure Dig',
-    category: 'curiosity',
-    dogId: 'dog-1',
-    dogName: 'Barnaby',
-    durationSeconds: 600,
-    mode: 'video',
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    rating: 5,
-    notes: 'Used fleece strips with squeaky toy prize!',
-  },
-  {
-    id: 'sample-3',
-    gameId: 'cup-shuffle',
-    gameTitle: 'The Great Cup Shuffle',
-    category: 'problem_solving',
-    dogId: 'dog-1',
-    dogName: 'Barnaby',
-    durationSeconds: 420,
-    mode: 'quick',
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    rating: 4,
-  }
-];
-
 type MainTab = 'games' | 'streaks' | 'story' | 'activity' | 'admin' | 'admin_games';
 const STORAGE_CUSTOM_GAMES_KEY = 'paws_and_play_custom_games';
 
 export default function App() {
-  // Persistence
-  const [profile, setProfile] = useState<DogProfile>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_PROFILE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed;
+  useModalAccessibility();
+  const [identity, setIdentity] = useState<{ user: UserAccount | null } | null>(null);
+  useEffect(() => {
+    let generation = 0;
+    const unsubscribe = onAuthStateChanged(auth, async fbUser => {
+      const current = ++generation;
+      if (!fbUser) { setIdentity({ user: null }); return; }
+      setIdentity(null);
+      try {
+        const token = await fbUser.getIdTokenResult();
+        if (current === generation) setIdentity({ user: mapFirebaseUser(fbUser,
+          token.claims.admin === true ? { role: 'admin' } : undefined) });
+      } catch {
+        if (current === generation) setIdentity({ user: mapFirebaseUser(fbUser) });
       }
-      return DEFAULT_PROFILE;
-    } catch {
-      return DEFAULT_PROFILE;
-    }
-  });
+    });
+    return () => { generation++; unsubscribe(); };
+  }, []);
+  if (!identity) return <div role="status" className="min-h-dvh grid place-items-center">Loading your play space…</div>;
+  return <><PlayerApp key={identity.user?.uid || 'guest'} currentUser={identity.user} /><InformationModal /></>;
+}
 
-  const [sessions, setSessions] = useState<PlaySession[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_SESSIONS_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_SESSIONS;
-    } catch {
-      return DEFAULT_SESSIONS;
-    }
-  });
-
-  const [unlockedBonusGames, setUnlockedBonusGames] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_UNLOCKED_KEY);
-      return saved === 'true';
-    } catch {
-      return false;
-    }
-  });
-
+function PlayerApp({ currentUser }: { currentUser: UserAccount | null }) {
+  const player = usePlayerData(currentUser);
+  const sessions = player.sessions;
+  const profile = { ...player.profile, streakCount: playStreak(sessions) };
+  const unlockedBonusGames = true;
   // Custom & Admin Managed Games Catalog
   const [customGames, setCustomGames] = useState<Game[]>(() => {
     try {
@@ -174,7 +114,7 @@ export default function App() {
     const loadCloudGames = async () => {
       try {
         const cloudGames = await fetchCustomGamesFromCloud();
-        if (cloudGames && cloudGames.length > 0) {
+        if (cloudGames) {
           setCustomGames(cloudGames);
           localStorage.setItem(STORAGE_CUSTOM_GAMES_KEY, JSON.stringify(cloudGames));
         }
@@ -231,125 +171,21 @@ export default function App() {
   const [selectedGameForTimer, setSelectedGameForTimer] = useState<Game | null>(null);
   const [selectedGameForVideo, setSelectedGameForVideo] = useState<Game | null>(null);
   const [isSurpriseModalOpen, setIsSurpriseModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isStoryModalOpen, setIsStoryModalOpen] = useState(false);
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
 
   // Cloud Account & Auth State
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [authPromptContext, setAuthPromptContext] = useState<string | undefined>(undefined);
 
-  // Listen to Firebase Auth state & sync data
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        const userAccount = mapFirebaseUser(fbUser);
-        setCurrentUser(userAccount);
-
-        // Sync dog profile with cloud
-        try {
-          const cloudProfile = await fetchDogProfileFromCloud(fbUser.uid);
-          if (cloudProfile && cloudProfile.name) {
-            setProfile(cloudProfile);
-          } else if (profile.name) {
-            await saveDogProfileToCloud(fbUser.uid, profile);
-          }
-        } catch (e) {
-          console.error('Error fetching cloud dog profile:', e);
-        }
-
-        // Sync and merge sessions
-        try {
-          const mergedSessions = await syncAllSessionsToCloud(fbUser.uid, sessions);
-          setSessions(mergedSessions);
-
-          // Update user usage profile in Firestore for Admin Intelligence
-          const totalPlaySecs = mergedSessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-          await syncUserProfileAndUsage(
-            userAccount,
-            profile,
-            mergedSessions.length,
-            totalPlaySecs
-          );
-        } catch (e) {
-          console.error('Error syncing sessions with cloud:', e);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Save to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_SESSIONS_KEY, JSON.stringify(sessions));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [sessions]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_UNLOCKED_KEY, String(unlockedBonusGames));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [unlockedBonusGames]);
-
-  // Handle Onboarding Completion
   const handleOnboardingComplete = (completedProfile: DogProfile) => {
-    setProfile(completedProfile);
-    if (currentUser) {
-      saveDogProfileToCloud(currentUser.uid, completedProfile).catch(console.error);
-    }
-    // Automatically switch to games tab
+    player.saveProfile(completedProfile);
     setCurrentTab('games');
   };
-
-  const handleProfileSave = (updated: DogProfile) => {
-    setProfile(updated);
-    if (currentUser) {
-      saveDogProfileToCloud(currentUser.uid, updated).catch(console.error);
-    }
-  };
-
-  const handleAuthSuccess = async (user: UserAccount) => {
-    setCurrentUser(user);
-    try {
-      if (profile.name) {
-        await saveDogProfileToCloud(user.uid, profile);
-      }
-      const merged = await syncAllSessionsToCloud(user.uid, sessions);
-      setSessions(merged);
-    } catch (e) {
-      console.error('Post-auth sync error:', e);
-    }
-  };
-
-  const handleManualSync = async () => {
-    if (!currentUser) return;
-    try {
-      await saveDogProfileToCloud(currentUser.uid, profile);
-      const merged = await syncAllSessionsToCloud(currentUser.uid, sessions);
-      setSessions(merged);
-    } catch (e) {
-      console.error('Manual sync failed:', e);
-      throw e;
-    }
-  };
+  const handleProfileSave = player.saveProfile;
+  const handleAuthSuccess = () => {};
+  const handleManualSync = player.sync;
 
   // Compute filtered games (using allMasterGames, filtering out archived games unless in admin mode)
   const filteredGames = useMemo(() => {
@@ -415,6 +251,7 @@ export default function App() {
       await saveCustomGameToCloud(gameToSave);
     } catch (e) {
       console.warn('Could not save to Firestore, continuing with local state:', e);
+      throw e;
     }
 
     // 2. Update local state
@@ -435,6 +272,7 @@ export default function App() {
       await deleteCustomGameFromCloud(gameId);
     } catch (e) {
       console.warn('Could not delete from Firestore, deleting locally:', e);
+      throw e;
     }
     setCustomGames(prev => prev.filter(g => g.id !== gameId));
   };
@@ -446,40 +284,18 @@ export default function App() {
     await handleAdminSaveGame(updatedGame);
   };
 
-  const handleSessionComplete = (newSession: PlaySession) => {
-    const sessionToSave: PlaySession = {
-      ...newSession,
-      isCloudSaved: !!currentUser,
-    };
-
-    if (currentUser) {
-      saveSessionToCloud(currentUser.uid, sessionToSave).catch(console.error);
-    }
-
-    setSessions(prev => [sessionToSave, ...prev]);
-
-    // increment streak and update profile in state and cloud
-    setProfile(prev => {
-      const updated = {
-        ...prev,
-        streakCount: (prev.streakCount || 1) + 1,
-      };
-      if (currentUser) {
-        saveDogProfileToCloud(currentUser.uid, updated).catch(console.error);
-      }
-      return updated;
-    });
-  };
+  const handleSessionComplete = player.addSession;
 
   const handleUnlockBonus = () => {
-    setUnlockedBonusGames(true);
+    // All games are included in V1.
   };
 
   // Today count
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todaySessionsCount = sessions.filter(s => s.timestamp.startsWith(todayStr)).length;
+  const todayStr = localDay(new Date());
+  const todaySessionsCount = sessions.filter(s => s.durationSeconds > 0 && localDay(new Date(s.timestamp)) === todayStr).length;
 
   // If the user hasn't completed onboarding yet, render the mobile-first Onboarding Flow!
+  if (!player.initialized) return <div role="status" className="min-h-dvh grid place-items-center">Loading your saved play history…<button className="primary-button" onClick={() => void logOutUser()}>Continue as guest</button></div>;
   if (!profile.hasCompletedOnboarding) {
     return (
       <OnboardingFlow
@@ -527,7 +343,7 @@ export default function App() {
               title="View Daily Play Streak"
             >
               <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-              <span>{profile.streakCount || 1}d</span>
+              <span>{profile.streakCount || 0}d</span>
             </button>
 
             {/* Admin Center Quick Access Chip (for admin accounts) */}
@@ -581,7 +397,7 @@ export default function App() {
                 id="top-signin-btn"
                 onClick={() => {
                   soundFx.playBoop(560);
-                  setAuthPromptContext(`Create an account with Google, Facebook, Instagram, or Email to save ${profile.name || 'your pup'}'s play sessions safely in the cloud.`);
+                  setAuthPromptContext(`Create an account with email to save ${profile.name || 'your pup'}'s play sessions safely in the cloud.`);
                   setIsAuthModalOpen(true);
                 }}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-[#FF7C00] to-[#FF9820] hover:brightness-105 text-white text-xs font-black shadow-xs active:scale-95 transition-all"
@@ -599,6 +415,7 @@ export default function App() {
             {/* Dog Avatar / Profile Button */}
             <button
               id="top-profile-chip"
+              aria-label={`Edit ${profile.name}'s profile`}
               onClick={() => {
                 soundFx.playBoop(480);
                 setIsProfileModalOpen(true);
@@ -638,7 +455,7 @@ export default function App() {
                 dogName={profile.name || 'your pup'}
                 sessionsCount={sessions.length}
                 onOpenAuth={() => {
-                  setAuthPromptContext(`Create an account with Google, Facebook, Instagram, or Email to back up ${profile.name || 'your pup'}'s play history, streaks, and unlocked bonus games.`);
+                  setAuthPromptContext(`Create an account with email to back up ${profile.name || 'your pup'}'s play history, streaks, and unlocked bonus games.`);
                   setIsAuthModalOpen(true);
                 }}
               />
@@ -862,10 +679,10 @@ export default function App() {
 
               <div className="space-y-2.5">
                 {[
-                  { days: 3, label: '3-Day Play Starter', icon: '🥉', unlocked: (profile.streakCount || 1) >= 3 },
-                  { days: 7, label: '7-Day Play Master', icon: '🥈', unlocked: (profile.streakCount || 1) >= 7 },
-                  { days: 14, label: '14-Day Olympic Canine Athlete', icon: '🥇', unlocked: (profile.streakCount || 1) >= 14 },
-                  { days: 30, label: '30-Day Golden Bond Hall of Fame', icon: '👑', unlocked: (profile.streakCount || 1) >= 30 },
+                  { days: 3, label: '3-Day Play Starter', icon: '🥉', unlocked: (profile.streakCount || 0) >= 3 },
+                  { days: 7, label: '7-Day Play Master', icon: '🥈', unlocked: (profile.streakCount || 0) >= 7 },
+                  { days: 14, label: '14-Day Olympic Canine Athlete', icon: '🥇', unlocked: (profile.streakCount || 0) >= 14 },
+                  { days: 30, label: '30-Day Golden Bond Hall of Fame', icon: '👑', unlocked: (profile.streakCount || 0) >= 30 },
                 ].map((m) => (
                   <div
                     key={m.days}
@@ -885,7 +702,7 @@ export default function App() {
                     <span className={`text-[11px] font-black px-2 py-0.5 rounded-full ${
                       m.unlocked ? 'bg-amber-500 text-white' : 'bg-stone-200 text-stone-600'
                     }`}>
-                      {m.unlocked ? 'CLAIMED' : `${m.days - (profile.streakCount || 1)}d left`}
+                      {m.unlocked ? 'CLAIMED' : `${m.days - (profile.streakCount || 0)}d left`}
                     </span>
                   </div>
                 ))}
@@ -903,7 +720,7 @@ export default function App() {
                 </button>
                 <div>
                   <h4 className="font-bold text-xs text-amber-950">
-                    Play O'Clock Chime is set for {profile.playOClockTime || '17:30'}
+                    Your preferred play time is {profile.playOClockTime || '17:30'}
                   </h4>
                   <p className="text-[11px] text-amber-800">
                     Tap the speaker to test the happy chime {profile.name} will recognize!
@@ -940,7 +757,7 @@ export default function App() {
                   Share {profile.name}'s Athlete Card to Instagram & TikTok
                 </h3>
                 <p className="text-xs text-white/90 mt-1">
-                  Generate customized high-resolution story images, add zoomie & good boy stickers, and unlock 2 secret games!
+                  Generate customized high-resolution story images, add zoomie & good boy stickers, and save or share your favorite moments.
                 </p>
               </div>
 
@@ -988,14 +805,14 @@ export default function App() {
             currentUser={currentUser}
             onOpenShareCard={() => setIsStoryModalOpen(true)}
             onOpenAuth={() => {
-              setAuthPromptContext(`Create an account with Google, Facebook, Instagram or Email to back up ${profile.name || 'your pup'}'s play history safely in the cloud.`);
+              setAuthPromptContext(`Create an account with email to back up ${profile.name || 'your pup'}'s play history safely in the cloud.`);
               setIsAuthModalOpen(true);
             }}
           />
         )}
 
         {/* TAB 5 & 6: ADMIN CONTROL SECTIONS */}
-        {(currentTab === 'admin' || currentTab === 'admin_games') && (
+        {isUserAdmin(currentUser) && (currentTab === 'admin' || currentTab === 'admin_games') && (
           <div className="space-y-6">
             {/* Admin Sub-navigation switch */}
             <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-stone-100 border border-stone-200/80">
@@ -1043,18 +860,18 @@ export default function App() {
 
             {/* Admin View 1: Signups & App Usage Stats */}
             {currentTab === 'admin' && (
-              <AdminUsersDashboard
+              <Suspense fallback={<p>Loading administration…</p>}><AdminUsersDashboard
                 currentUser={currentUser}
                 onOpenAuth={() => {
                   setAuthPromptContext('Sign in with your admin credentials to monitor user sign ups and app usage metrics.');
                   setIsAuthModalOpen(true);
                 }}
-              />
+              /></Suspense>
             )}
 
             {/* Admin View 2: Games Catalog Management */}
             {currentTab === 'admin_games' && (
-              <AdminGamesManager
+              <Suspense fallback={<p>Loading games manager…</p>}><AdminGamesManager
                 games={allMasterGames}
                 onSaveGame={handleAdminSaveGame}
                 onDeleteGame={handleAdminDeleteGame}
@@ -1062,13 +879,15 @@ export default function App() {
                 onPreviewGame={(game) => {
                   setSelectedGameForDetail(game);
                 }}
-              />
+              /></Suspense>
             )}
           </div>
         )}
 
+        <ReminderControl time={profile.playOClockTime || '17:30'} />
         {/* FOUNDER & CREATOR BRAND FOOTER */}
         <footer id="app-founder-footer" className="pt-10 pb-24 border-t border-[#184D7A]/10 text-center space-y-4">
+          <div className="flex justify-center gap-5 text-sm">{!currentUser && <button className="underline" onClick={() => { if (window.confirm('Erase this device’s guest profile and history? This cannot be undone.')) player.clear(); }}>Clear guest data</button>}<a href="/privacy.html" target="_blank" rel="noreferrer" className="underline">Privacy</a><a href="/support.html" target="_blank" rel="noreferrer" className="underline">Help & support</a></div>
           <div className="flex justify-center">
             <WaggingTailLogo size="md" variant="horizontal" showSubtitle={true} />
           </div>
@@ -1188,6 +1007,7 @@ export default function App() {
         </div>
       </nav>
 
+      {player.error && <div role="alert" className="fixed bottom-24 left-4 right-4 z-40 mx-auto max-w-lg rounded-2xl bg-amber-50 border border-amber-300 p-4 text-sm text-amber-950 shadow-lg">{player.error} <button disabled={player.syncing} onClick={() => void player.sync().catch(() => {})} className="font-bold underline">Retry sync</button></div>}
       {/* MODALS */}
       <DogProfileModal
         isOpen={isProfileModalOpen}
@@ -1195,7 +1015,7 @@ export default function App() {
         profile={profile}
         currentUser={currentUser}
         onOpenAuth={() => {
-          setAuthPromptContext(`Create an account with Google, Facebook, Instagram or Email to save ${profile.name || 'your pup'}'s settings and streaks.`);
+          setAuthPromptContext(`Create an account with email to save ${profile.name || 'your pup'}'s settings and streaks.`);
           setIsAuthModalOpen(true);
         }}
         onSave={handleProfileSave}
@@ -1218,7 +1038,11 @@ export default function App() {
           currentUser={currentUser}
           dogProfile={profile}
           sessions={sessions}
-          onSignOut={() => setCurrentUser(null)}
+          onSignOut={() => {}}
+          onImportGuest={player.importGuest}
+          onPauseSync={player.pause}
+          onResumeSync={player.resume}
+          onClearData={player.clear}
           onManualSync={handleManualSync}
           onOpenAdmin={() => {
             setCurrentTab('admin');
@@ -1268,14 +1092,6 @@ export default function App() {
         isUnlocked={unlockedBonusGames}
       />
 
-      <ShareCardModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        dogProfile={profile}
-        sessions={sessions}
-        onUnlockSecretGames={handleUnlockBonus}
-        isUnlocked={unlockedBonusGames}
-      />
 
       {/* Offline Connectivity Toast Indicator */}
       <OfflineIndicator />

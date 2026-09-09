@@ -1,6 +1,13 @@
 node_modules/
+.npm-cache/
+.tools/
+test-results/
+playwright-report/
+firebase-debug.log
+firestore-debug.log
 build/
 dist/
+dev-dist/
 coverage/
 .DS_Store
 *.log

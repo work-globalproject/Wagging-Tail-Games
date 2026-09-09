@@ -1,3 +1,4 @@
+import { localDay } from '../lib/playerData';
 import React from 'react';
 import { PlaySession, DogProfile, UserAccount } from '../types';
 import { Flame, Trophy, Calendar, Clock, Heart, Award, Sparkles, Share2, Cloud, CheckCircle2 } from 'lucide-react';
@@ -20,10 +21,10 @@ export const StatsDashboard: React.FC<Props> = ({
   onOpenAuth,
 }) => {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = localDay(now);
 
   // Filter today's sessions
-  const todaySessions = sessions.filter((s) => s.timestamp.startsWith(todayStr));
+  const todaySessions = sessions.filter((s) => s.durationSeconds > 0 && localDay(new Date(s.timestamp)) === todayStr);
 
   // Filter this week's sessions (last 7 days)
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -67,7 +68,7 @@ export const StatsDashboard: React.FC<Props> = ({
               </span>
               <span className="flex items-center text-xs font-semibold text-amber-100">
                 <Flame className="w-3.5 h-3.5 text-amber-200 fill-amber-200 mr-0.5" />
-                Streak Active
+                {dogProfile.streakCount ? `${dogProfile.streakCount} day streak` : 'Start your streak'}
               </span>
             </div>
             <h2 className="font-display font-bold text-2xl sm:text-3xl mt-0.5">
@@ -75,7 +76,7 @@ export const StatsDashboard: React.FC<Props> = ({
             </h2>
             <p className="text-xs text-amber-100 mt-0.5">
               {todaySessions.length >= 2
-                ? `Amazing work! ${dogProfile.name}'s brain and body are thoroughly stimulated.`
+                ? `Amazing work! ${dogProfile.name}'s play goal is complete. Make time for rest too.`
                 : `Aim for 2-3 quick fun games daily to deepen your mutual bond.`}
             </p>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DogProfile, DogSize, EnergyLevel, DogMotivation, UserAccount } from '../types';
 import { POPULAR_BREEDS, MOTIVATION_LABELS } from '../data/games';
 import { X, Sparkles, Heart, AlertCircle, Instagram, Cloud } from 'lucide-react';
@@ -26,6 +26,13 @@ export const DogProfileModal: React.FC<Props> = ({ isOpen, onClose, profile, cur
   const [playOClockTime, setPlayOClockTime] = useState(profile.playOClockTime || '17:30');
   const [dailyGoalGames, setDailyGoalGames] = useState(profile.dailyGoalGames || 2);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(profile.name); setBreed(profile.breed); setSize(profile.size);
+    setEnergyLevel(profile.energyLevel); setIsFoodMotivated(profile.isFoodMotivated);
+    setMotivations(profile.motivations); setAvatarEmoji(profile.avatarEmoji || '🐕');
+    setPlayOClockTime(profile.playOClockTime || '17:30'); setDailyGoalGames(profile.dailyGoalGames || 2);
+  }, [isOpen]);
   if (!isOpen) return null;
 
   const handleBreedChange = (selectedBreed: string) => {
@@ -77,7 +84,7 @@ export const DogProfileModal: React.FC<Props> = ({ isOpen, onClose, profile, cur
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Dog Profile" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div 
         id="dog-profile-modal"
         className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-amber-100 overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200"
@@ -93,7 +100,7 @@ export const DogProfileModal: React.FC<Props> = ({ isOpen, onClose, profile, cur
           </div>
           <button
             id="close-profile-modal"
-            onClick={onClose}
+            onClick={onClose} aria-label="Close"
             className="p-2 rounded-full hover:bg-white/20 transition-colors text-white"
           >
             <X className="w-5 h-5" />

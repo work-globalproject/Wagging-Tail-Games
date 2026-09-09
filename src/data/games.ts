@@ -1,6 +1,6 @@
 import { Game } from '../types';
 
-export const GAMES_DATA: Game[] = [
+const PROTOTYPE_GAMES: Game[] = [
   // CURIOSITY (4 Games)
   {
     id: 'snuffle-mat-dig',
@@ -13,13 +13,13 @@ export const GAMES_DATA: Game[] = [
     durationMinutes: 8,
     suitableSizes: ['small', 'medium', 'large', 'giant'],
     primaryMotivations: ['sniffing', 'food', 'toys_fetch'],
-    nonFoodAlternative: 'Hide tiny crinkly squeaker bits, cut fleece strips scented with dried herbs/lavender, or mini plushies instead of treats!',
-    materials: ['A snuffle mat (or a rolled/folded plush blanket or bath towel)', 'Smelly dry treats or mini favorite soft toys'],
+    nonFoodAlternative: 'Partly cover a sturdy, dog-safe toy with a towel. Choose a toy too large to swallow and remove it if damaged.',
+    materials: ['A snuffle mat (or a rolled/folded plush blanket or bath towel)', 'Smelly dry treats or appropriately sized dog-safe toys'],
     steps: [
       {
         stepNumber: 1,
         title: 'Bury the loot',
-        instruction: 'Tuck high-value rewards or mini squeakers deep within the fabric folds while your pup watches with anticipation.',
+        instruction: 'Tuck high-value rewards or a dog-safe toy partly beneath the fabric while your pup watches with anticipation.',
         proTip: 'Start with 2-3 pieces sitting on top so they understand the mission immediately.'
       },
       {
@@ -93,7 +93,7 @@ export const GAMES_DATA: Game[] = [
       {
         stepNumber: 1,
         title: 'Load the mystery cups',
-        instruction: 'Drop treats or scented charms into 3 or 4 random muffin slots. Cover ALL slots with tennis balls so they look identical.',
+        instruction: 'Place suitable treats in 3 or 4 random muffin slots. Cover ALL slots with tennis balls so they look identical.',
         proTip: 'Show them you dropping one ball so they grasp the mechanism.'
       },
       {
@@ -124,7 +124,7 @@ export const GAMES_DATA: Game[] = [
     durationMinutes: 12,
     suitableSizes: ['small', 'medium', 'large', 'giant'],
     primaryMotivations: ['sniffing', 'chase_speed', 'toys_fetch'],
-    nonFoodAlternative: 'Drag their favorite squeaker toy along the floor surface to create a physical scent trail leading to an elevated hiding spot!',
+    nonFoodAlternative: 'Drag their favorite squeaker toy along the floor surface to create a scent trail leading to an easy hiding spot at floor level!',
     materials: ['A favorite squeaker or scented reward', 'Living room furniture or garden bushes'],
     steps: [
       {
@@ -163,8 +163,8 @@ export const GAMES_DATA: Game[] = [
     durationMinutes: 8,
     suitableSizes: ['small', 'medium', 'large', 'giant'],
     primaryMotivations: ['food', 'toys_fetch', 'praise_affection'],
-    nonFoodAlternative: 'Hide a miniature squeaker or their favorite bouncy ball under the cup—dogs can hear and smell the rubber easily!',
-    materials: ['3 opaque plastic cups (or clean flower pots/tupperware)', 'High-value treat or mini ball'],
+    nonFoodAlternative: 'Use a large container to partly cover a sturdy dog-safe toy. Avoid small balls and loose squeakers.',
+    materials: ['3 opaque plastic cups (or clean flower pots/tupperware)', 'Suitable treat or dog-safe toy too large to swallow'],
     steps: [
       {
         stepNumber: 1,
@@ -243,7 +243,7 @@ export const GAMES_DATA: Game[] = [
       {
         stepNumber: 1,
         title: 'Lay flat and seed',
-        instruction: 'Lay the towel flat. Scatter treats or small toys along its length. Begin rolling the towel like a giant sushi roll or burrito.',
+        instruction: 'Lay the towel flat. Place suitable treats or a sturdy dog-safe toy along its length. Begin rolling the towel like a giant sushi roll or burrito.',
         proTip: 'Roll loosely on the first try. Tighten the roll as your dog becomes a master chef.'
       },
       {
@@ -404,8 +404,8 @@ export const GAMES_DATA: Game[] = [
       },
       {
         stepNumber: 3,
-        title: 'The airborne leap',
-        instruction: 'Once confident, lift the hoop 5 to 10 cm off the turf. Watch them spring gracefully through like a circus superstar!',
+        title: 'A confident walk-through',
+        instruction: 'Keep the hoop on the ground and repeat a relaxed walk-through. Allow your dog to approach at their own pace.',
         proTip: 'Always maintain generous clearance for their tail and rear legs.'
       }
     ],
@@ -529,6 +529,10 @@ export const GAMES_DATA: Game[] = [
     isSecret: true
   }
 ];
+
+// These DIY bottle/sock activities are held back from V1 pending a content review.
+export const GAMES_DATA = PROTOTYPE_GAMES.filter(game => !['bottle-spinner-contraption', 'secret-sock-detective', 'broomstick-limbo-hurdles'].includes(game.id));
+
 
 export const POPULAR_BREEDS: { breed: string; typicalSize: 'small' | 'medium' | 'large' | 'giant'; typicalEnergy: 'low' | 'medium' | 'high' }[] = [
   { breed: 'Golden Retriever', typicalSize: 'large', typicalEnergy: 'high' },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Game, DogProfile, PlaySession } from '../types';
 import { getVisualProfileForGame } from '../data/visualGameData';
 import { X, Play, Pause, RotateCcw, Check, Sparkles, Heart } from 'lucide-react';
@@ -37,11 +37,14 @@ export const PlayTimerModal: React.FC<Props> = ({
   const [rating, setRating] = useState(5);
   const [isDone, setIsDone] = useState(false);
   const [note, setNote] = useState('');
+  const clock = useRef({ remaining: defaultSeconds, elapsed: 0, last: 0 });
 
   // Reset when game changes or modal opens
   useEffect(() => {
     if (isOpen && game) {
       const secs = game.durationMinutes * 60;
+      clock.current = { remaining: secs, elapsed: 0, last: Date.now() };
+      setNote(''); setRating(5);
       setTimeLeft(secs);
       setElapsed(0);
       setIsRunning(true);
@@ -49,34 +52,27 @@ export const PlayTimerModal: React.FC<Props> = ({
       setCheer(`Go, ${dogProfile.name}! Teamwork time! 🐾`);
       soundFx.playWhistleStart();
     }
-  }, [isOpen, game, dogProfile.name]);
+  }, [isOpen, game?.id]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-        setElapsed((e) => {
-          const next = e + 1;
-          if (next % 45 === 0) {
-            soundFx.playCountdownTick();
-            const randomCheer = CHEER_MESSAGES[Math.floor(Math.random() * CHEER_MESSAGES.length)];
-            setCheer(randomCheer);
-          }
-          return next;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
+    if (!isOpen || !isRunning) return;
+    clock.current.last = Date.now();
+    const tick = () => {
+      const now = Date.now();
+      const seconds = Math.max(0, Math.floor((now - clock.current.last) / 1000));
+      clock.current.last += seconds * 1000;
+      const played = Math.min(seconds, clock.current.remaining);
+      clock.current.elapsed += played;
+      clock.current.remaining -= played;
+      setElapsed(clock.current.elapsed);
+      setTimeLeft(clock.current.remaining);
+      if (clock.current.remaining === 0) handleComplete();
     };
-  }, [isRunning, timeLeft]);
+    const interval = window.setInterval(tick, 250);
+    const resume = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', resume);
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', resume); };
+  }, [isRunning, isOpen]);
 
   const handleComplete = () => {
     setIsRunning(false);
@@ -98,7 +94,7 @@ export const PlayTimerModal: React.FC<Props> = ({
       category: game.category,
       dogId: dogProfile.id,
       dogName: dogProfile.name,
-      durationSeconds: elapsed > 0 ? elapsed : 60,
+      durationSeconds: elapsed,
       mode: 'timer',
       timestamp: new Date().toISOString(),
       notes: note.trim() || undefined,
@@ -120,7 +116,7 @@ export const PlayTimerModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Play Timer" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
       <div 
         id="play-timer-modal"
         className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-6 text-center animate-in fade-in zoom-in-95 duration-200"
@@ -136,7 +132,7 @@ export const PlayTimerModal: React.FC<Props> = ({
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={onClose} aria-label="Close"
             className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -197,7 +193,7 @@ export const PlayTimerModal: React.FC<Props> = ({
                 -1 min
               </button>
               <button
-                onClick={() => setTimeLeft((t) => t + 60)}
+                onClick={() => { clock.current.remaining += 60; setTimeLeft(clock.current.remaining); }}
                 className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold transition-colors"
               >
                 +1 min
@@ -206,6 +202,7 @@ export const PlayTimerModal: React.FC<Props> = ({
                 onClick={() => {
                   soundFx.playBoop(420);
                   setIsRunning(false);
+                  clock.current = { remaining: defaultSeconds, elapsed: 0, last: Date.now() };
                   setTimeLeft(defaultSeconds);
                   setElapsed(0);
                 }}
@@ -273,7 +270,7 @@ export const PlayTimerModal: React.FC<Props> = ({
                 Spectacular Play Session!
               </h3>
               <p className="text-xs text-stone-500 mt-1">
-                You and {dogProfile.name} just completed {formatTime(elapsed || 60)} of bonded playtime.
+                You and {dogProfile.name} just completed {formatTime(elapsed)} of bonded playtime.
               </p>
             </div>
 

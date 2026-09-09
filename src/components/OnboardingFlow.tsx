@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DogProfile, DogSize, EnergyLevel, DogMotivation } from '../types';
 import { Sparkles, ArrowRight, Check, Heart, Flame, Clock, Bone, Trophy, ChevronLeft } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { GAMES_DATA } from '../data/games';
 import { soundFx } from '../utils/audio';
 import WaggingTailLogo from './WaggingTailLogo';
 
@@ -35,9 +36,9 @@ export const OnboardingFlow: React.FC<Props> = ({ onComplete, initialProfile }) 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Form states
-  const [name, setName] = useState(initialProfile?.name || 'Barnaby');
+  const [name, setName] = useState(initialProfile?.name || '');
   const [avatar, setAvatar] = useState(initialProfile?.avatarEmoji || '🐕');
-  const [breed, setBreed] = useState(initialProfile?.breed || 'Border Collie Mix');
+  const [breed, setBreed] = useState(initialProfile?.breed || '');
   const [size, setSize] = useState<DogSize>(initialProfile?.size || 'medium');
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel>(initialProfile?.energyLevel || 'high');
   const [isFoodMotivated, setIsFoodMotivated] = useState<boolean>(
@@ -82,7 +83,7 @@ export const OnboardingFlow: React.FC<Props> = ({ onComplete, initialProfile }) 
 
       const finalProfile: DogProfile = {
         id: initialProfile?.id || `dog-${Date.now()}`,
-        name: name.trim() || 'Barnaby',
+        name: name.trim() || 'Buddy',
         breed: breed.trim() || 'Good Boy Mix',
         size,
         energyLevel,
@@ -91,7 +92,7 @@ export const OnboardingFlow: React.FC<Props> = ({ onComplete, initialProfile }) 
         avatarEmoji: avatar,
         playOClockTime: playOClock,
         dailyGoalGames: dailyGoal,
-        streakCount: initialProfile?.streakCount || 1,
+        streakCount: initialProfile?.streakCount || 0,
         hasCompletedOnboarding: true,
         createdAt: initialProfile?.createdAt || new Date().toISOString(),
       };
@@ -468,7 +469,7 @@ export const OnboardingFlow: React.FC<Props> = ({ onComplete, initialProfile }) 
               <div className="p-3.5 rounded-2xl bg-[#40B3C9]/10 border border-[#40B3C9]/30 flex items-center gap-3">
                 <div className="text-2xl">🎉</div>
                 <div className="text-left text-xs text-[#184D7A]">
-                  <div className="font-bold">All 12 Wagging Tail Games Ready!</div>
+                  <div className="font-bold">{GAMES_DATA.length} games ready to explore</div>
                   <div className="text-[11px] text-[#184D7A]/80">
                     Customized for {name}'s {size} build & {!isFoodMotivated ? 'high-drive toy motor' : 'treat-loving heart'}.
                   </div>

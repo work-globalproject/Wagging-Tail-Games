@@ -1,3 +1,4 @@
+import { exportMedia } from '../lib/device';
 import React, { useState, useRef } from 'react';
 import { DogProfile, PlaySession } from '../types';
 import { 
@@ -43,6 +44,7 @@ export const StoryShareModal: React.FC<Props> = ({
   ]);
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const storyPreviewRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
@@ -67,7 +69,7 @@ export const StoryShareModal: React.FC<Props> = ({
     return 'Master Canine Problem Solver';
   };
 
-  const streakDays = dogProfile.streakCount || Math.max(1, sessions.length);
+  const streakDays = dogProfile.streakCount || 0;
 
   // Generate real Canvas 1080x1920 PNG for IG/TikTok Stories
   const generateStoryCanvas = (): Promise<Blob | null> => {
@@ -241,35 +243,14 @@ export const StoryShareModal: React.FC<Props> = ({
   };
 
   const handleShareToStories = async () => {
-    setIsExporting(true);
+    setIsExporting(true); setExportError('');
     soundFx.playWhistleStart();
 
     try {
       const blob = await generateStoryCanvas();
       if (!blob) throw new Error('Canvas rendering failed');
 
-      const file = new File([blob], `${dogProfile.name}-WaggingTailGames-Story.png`, {
-        type: 'image/png',
-      });
-
-      // Try native mobile share (Instagram / TikTok stories support)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `${dogProfile.name}'s Wagging Tail Games Story Card`,
-          text: `Check out ${dogProfile.name}'s play stats on Wagging Tail Games! #WaggingTailGames #DogBonding`,
-        });
-      } else {
-        // Fallback: Download file directly
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${dogProfile.name}-Story-1080x1920.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
+      await exportMedia(blob, 'Wagging-Tail-Story.png', `${dogProfile.name}'s play story`);
 
       // Confetti & unlock games
       confetti({
@@ -282,7 +263,7 @@ export const StoryShareModal: React.FC<Props> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 4000);
     } catch (err) {
-      console.error(err);
+      setExportError('Export was cancelled or could not finish. Your story is still here.');
       // If user cancelled share or failed, still offer download
       soundFx.playBoop(400);
     } finally {
@@ -291,40 +272,34 @@ export const StoryShareModal: React.FC<Props> = ({
   };
 
   const handleDownloadOnly = async () => {
-    setIsExporting(true);
+    setIsExporting(true); setExportError('');
     soundFx.playBoop(600);
     try {
       const blob = await generateStoryCanvas();
       if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${dogProfile.name}-IG-Story-1080x1920.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
+        await exportMedia(blob, 'Wagging-Tail-Story.png', `${dogProfile.name}'s play story`);
         soundFx.playFanfare();
         confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
         onUnlockSecretGames();
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
       }
+    } catch {
+      setExportError('Export was cancelled or could not finish. Please try again.');
     } finally {
       setIsExporting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Story Share" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
       <div 
         id="story-share-modal"
         className="relative w-full max-w-sm sm:max-w-md bg-stone-900 rounded-3xl shadow-2xl border border-stone-800 text-white overflow-hidden my-auto flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Close Button */}
         <button
-          onClick={onClose}
+          onClick={onClose} aria-label="Close"
           className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 flex items-center justify-center text-stone-300 hover:text-white transition-colors"
         >
           <X className="w-5 h-5" />
@@ -340,7 +315,7 @@ export const StoryShareModal: React.FC<Props> = ({
             {dogProfile.name}'s Athlete Story Card
           </h2>
           <p className="text-stone-400 text-xs mt-0.5">
-            Perfect 9:16 vertical format. Share to unlock 2 secret games!
+            A personal 9:16 story image. Choose where to save or share it.
           </p>
         </div>
 
@@ -492,18 +467,17 @@ export const StoryShareModal: React.FC<Props> = ({
             </div>
             <div className="text-left text-xs">
               <div className="font-bold text-amber-200">
-                {isUnlocked ? '2 Secret Games Unlocked!' : 'Share to Unlock 2 Secret Games'}
+                Your story stays private until you share
               </div>
               <div className="text-stone-400 text-[11px]">
-                {isUnlocked
-                  ? 'Magic Sheet Ghost Tunnel & Missing Sock Heist are ready to play!'
-                  : 'Tap Share or Download to instantly unlock the Bed Sheet Tunnel & Missing Sock games.'}
+                All V1 games are included. Sharing is optional.
               </div>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons: Share to IG/TikTok + Save to Camera Roll */}
+        {exportError && <p role="status" className="p-4 text-sm text-amber-200">{exportError}</p>}
+        {/* Export actions */}
         <div className="p-4 bg-stone-950 border-t border-stone-800 space-y-2">
           <button
             id="share-to-stories-btn"

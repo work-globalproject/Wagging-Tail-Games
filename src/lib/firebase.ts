@@ -12,6 +12,9 @@ import {
   onAuthStateChanged,
   User
 } from 'firebase/auth';
+import { sendPasswordResetEmail, sendEmailVerification, reauthenticateWithCredential,
+  EmailAuthProvider, deleteUser, connectAuthEmulator, initializeAuth,
+  indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
 import {
   getFirestore,
   doc,
@@ -24,26 +27,47 @@ import {
   deleteDoc,
   serverTimestamp
 } from 'firebase/firestore';
+import { initializeFirestore, writeBatch, limit, connectFirestoreEmulator } from 'firebase/firestore';
+import { sessionMetadata } from './playerData';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { DogProfile, PlaySession, UserAccount } from '../types';
 
 // Initialize Firebase App singleton
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const emulated = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+const app = !getApps().length ? initializeApp(emulated ? { ...firebaseConfig, projectId: 'demo-wagging-tail', apiKey: 'demo-key', authDomain: 'demo-wagging-tail.firebaseapp.com' } : firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
+// Email-only V1 needs persistence, not a popup/redirect iframe. This also avoids
+// waiting for an external auth-domain iframe when the installed app is offline.
+export const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 
 // Use the provisioned database ID or default
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true },
+  emulated ? '(default)' : firebaseConfig.firestoreDatabaseId || '(default)');
 
-// Auth Providers
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}
 
-export const facebookProvider = new FacebookAuthProvider();
-facebookProvider.addScope('email');
-facebookProvider.addScope('public_profile');
+export const resetPassword = (email: string) => sendPasswordResetEmail(auth, email.trim());
+export const verifyEmail = () => auth.currentUser
+  ? sendEmailVerification(auth.currentUser) : Promise.reject(new Error('Sign in first.'));
+
+export async function deleteCurrentAccount(password: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error('Sign in again before deleting your account.');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  // Delete children first; deleting a Firestore parent does not delete its subcollections.
+  while (true) {
+    const page = await getDocs(query(collection(db, 'users', user.uid, 'sessions'), limit(200)));
+    if (page.empty) break;
+    const batch = writeBatch(db);
+    page.docs.forEach(item => batch.delete(item.ref));
+    await batch.commit();
+  }
+  await deleteDoc(doc(db, 'users', user.uid));
+  await deleteUser(user);
+}
 
 // Known Super Admin email addresses
 export const ADMIN_EMAILS = [
@@ -52,9 +76,6 @@ export const ADMIN_EMAILS = [
 
 export function isUserAdmin(user: UserAccount | null | undefined): boolean {
   if (!user) return false;
-  if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
-    return true;
-  }
   return user.role === 'admin';
 }
 
@@ -70,7 +91,7 @@ export function mapFirebaseUser(user: User, additionalData?: Partial<UserAccount
     else provider = 'other';
   }
 
-  const isAdmin = (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || additionalData?.role === 'admin';
+  const isAdmin = (user.emailVerified && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) || additionalData?.role === 'admin';
 
   return {
     uid: user.uid,
@@ -82,33 +103,6 @@ export function mapFirebaseUser(user: User, additionalData?: Partial<UserAccount
     role: isAdmin ? 'admin' : (additionalData?.role || 'pet_parent'),
     ...additionalData,
   };
-}
-
-// Social Sign-in Methods
-export async function signInWithGoogle(): Promise<UserAccount> {
-  const result = await signInWithPopup(auth, googleProvider);
-  return mapFirebaseUser(result.user);
-}
-
-export async function signInWithFacebook(): Promise<UserAccount> {
-  const result = await signInWithPopup(auth, facebookProvider);
-  return mapFirebaseUser(result.user);
-}
-
-export async function signInWithInstagram(): Promise<UserAccount> {
-  // Instagram uses OAuth through Meta / OAuthProvider
-  try {
-    const instagramProvider = new OAuthProvider('instagram.com');
-    const result = await signInWithPopup(auth, instagramProvider);
-    return mapFirebaseUser(result.user);
-  } catch {
-    // If custom instagram.com provider is not activated in Google Cloud console,
-    // gracefully attempt Facebook/Meta OAuth which connects Instagram accounts
-    const result = await signInWithPopup(auth, facebookProvider);
-    const userAcc = mapFirebaseUser(result.user);
-    userAcc.provider = 'instagram';
-    return userAcc;
-  }
 }
 
 export async function signUpWithEmail(
@@ -152,6 +146,7 @@ export async function saveDogProfileToCloud(userId: string, profile: DogProfile)
     );
   } catch (error) {
     console.error('Failed to save dog profile to cloud:', error);
+    throw error;
   }
 }
 
@@ -170,6 +165,7 @@ export async function fetchDogProfileFromCloud(userId: string): Promise<DogProfi
     }
   } catch (error) {
     console.error('Failed to fetch dog profile from cloud:', error);
+    throw error;
   }
   return null;
 }
@@ -183,7 +179,7 @@ export async function saveSessionToCloud(userId: string, session: PlaySession): 
     await setDoc(
       sessionRef,
       {
-        ...session,
+        ...sessionMetadata(session),
         isCloudSaved: true,
         savedAt: new Date().toISOString(),
       },
@@ -225,7 +221,7 @@ export async function fetchSessionsFromCloud(userId: string): Promise<PlaySessio
     return results;
   } catch (error) {
     console.error('Failed to fetch sessions from cloud:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -258,7 +254,7 @@ export async function syncAllSessionsToCloud(
     return merged;
   } catch (error) {
     console.error('Failed to sync all sessions to cloud:', error);
-    return localSessions;
+    throw error;
   }
 }
 
@@ -278,7 +274,6 @@ export async function syncUserProfileAndUsage(
       displayName: user.displayName,
       photoURL: user.photoURL,
       provider: user.provider,
-      role: user.role || (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()) ? 'admin' : 'pet_parent'),
       lastActiveAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -299,6 +294,7 @@ export async function syncUserProfileAndUsage(
     await setDoc(userRef, updatePayload, { merge: true });
   } catch (error) {
     console.error('Failed to sync user profile and usage stats:', error);
+    throw error;
   }
 }
 
@@ -384,7 +380,7 @@ export async function fetchCustomGamesFromCloud(): Promise<any[]> {
     return games;
   } catch (error) {
     console.error('Failed to fetch custom games from Firestore:', error);
-    return [];
+    throw error;
   }
 }
 

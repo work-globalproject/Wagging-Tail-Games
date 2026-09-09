@@ -12,7 +12,7 @@ export const VISUAL_GAME_PROFILES: Record<string, GameVisualProfile> = {
   'snuffle-mat-dig': {
     visualMaterials: [
       { icon: '🛏️', label: 'Snuffle Mat or Towel' },
-      { icon: '🎾', label: 'Toy / Mini Squeaker' },
+      { icon: '🎾', label: 'Large Dog-Safe Toy' },
     ],
     visualSteps: [
       {
@@ -20,7 +20,7 @@ export const VISUAL_GAME_PROFILES: Record<string, GameVisualProfile> = {
         icon: '🛏️ ⬇️ 🎾',
         action: '1. Bury the Loot',
         detail: 'Tuck toy into fabric folds',
-        cue: 'Hide deep',
+        cue: 'Leave part of the toy visible',
       },
       {
         stepNumber: 2,
@@ -40,7 +40,7 @@ export const VISUAL_GAME_PROFILES: Record<string, GameVisualProfile> = {
     shortBondTip: '🤝 Cheer together on the floor like teammates!',
     shortRewardTip: '🎾 Squeak favorite toy when discovered!',
     speechScript: [
-      'Step 1: Tuck the toy deep into the fabric folds.',
+      'Step 1: Partly cover a sturdy dog-safe toy with the towel.',
       'Step 2: Point and say: Find it! Let your pup sniff.',
       'Step 3: Celebrate every discovery with happy cheers!',
     ],
@@ -409,7 +409,7 @@ export const VISUAL_GAME_PROFILES: Record<string, GameVisualProfile> = {
         stepNumber: 3,
         icon: '🚀 ⭕ 🏆',
         action: '3. Airborne Leap!',
-        detail: 'Lift hoop 8 cm for graceful jump',
+        detail: 'Keep hoop on ground for another walk-through',
         cue: 'Circus star applause',
       },
     ],

@@ -54,13 +54,13 @@ export const SurpriseModal: React.FC<Props> = ({
   const selectedGame = filteredGames[currentIndex] || filteredGames[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Surprise" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
       <div 
         id="surprise-modal"
         className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-amber-200 overflow-hidden my-6 text-center animate-in fade-in zoom-in-95 duration-200"
       >
         <button
-          onClick={onClose}
+          onClick={onClose} aria-label="Close"
           className="absolute top-4 right-4 z-10 p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
         >
           <X className="w-5 h-5" />

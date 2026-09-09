@@ -105,10 +105,10 @@ export default function AdminUsersDashboard({ currentUser, onOpenGameManager, on
     const totalMinutes = Math.round(totalPlaySeconds / 60);
 
     // Most popular categories and games
-    const gameCounts: Record<string, { title: string; count: number }> = {};
+    const gameCounts: Record<string, { gameId: string; title: string; count: number }> = {};
     sessions.forEach((s) => {
       if (!gameCounts[s.gameId]) {
-        gameCounts[s.gameId] = { title: s.gameTitle, count: 0 };
+        gameCounts[s.gameId] = { gameId: s.gameId, title: s.gameTitle, count: 0 };
       }
       gameCounts[s.gameId].count += 1;
     });
@@ -121,8 +121,8 @@ export default function AdminUsersDashboard({ currentUser, onOpenGameManager, on
       totalUsers,
       totalPlaySessions,
       totalMinutes,
-      activeToday: Math.max(activeToday, 1),
-      activeThisWeek: Math.max(activeThisWeek, 1),
+      activeToday,
+      activeThisWeek,
       newSignupsThisWeek,
       providerCounts,
       topGames,

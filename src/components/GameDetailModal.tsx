@@ -33,7 +33,7 @@ export const GameDetailModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Game Detail" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs overflow-y-auto">
       <div 
         id="game-detail-modal"
         className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden my-4 sm:my-6 animate-in fade-in zoom-in-95 duration-200"
@@ -51,7 +51,7 @@ export const GameDetailModal: React.FC<Props> = ({
 
           <button
             id="close-detail-modal"
-            onClick={onClose}
+            onClick={onClose} aria-label="Close"
             className="p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -60,6 +60,7 @@ export const GameDetailModal: React.FC<Props> = ({
 
         {/* Modal Scrollable Body */}
         <div className="p-5 sm:p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+          <p className="rounded-xl bg-sky-50 p-3 text-xs text-[#184D7A]">Stay together while playing. Use dog-safe toys that cannot be swallowed and a non-slip space. Let your dog stop or rest at any time. Keep obstacle play at floor level; ask your vet about activity for puppies or dogs with mobility concerns.</p>
           {/* Animated Illustration Explainer */}
           <div>
             <AnimatedGameIllustration

@@ -13,7 +13,7 @@ import {
   Instagram
 } from 'lucide-react';
 import { UserAccount, DogProfile, PlaySession } from '../types';
-import { logOutUser } from '../lib/firebase';
+import { logOutUser, deleteCurrentAccount, verifyEmail } from '../lib/firebase';
 import { soundFx } from '../utils/audio';
 
 interface Props {
@@ -25,6 +25,10 @@ interface Props {
   onSignOut: () => void;
   onManualSync: () => Promise<void>;
   onOpenAdmin?: () => void;
+  onImportGuest: () => void;
+  onPauseSync: (waitForWrites?: boolean) => Promise<void>;
+  onResumeSync: () => void;
+  onClearData: () => void;
 }
 
 export default function AccountModal({
@@ -36,13 +40,30 @@ export default function AccountModal({
   onSignOut,
   onManualSync,
   onOpenAdmin,
+  onImportGuest, onPauseSync, onResumeSync, onClearData,
 }: Props) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const [message, setMessage] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [password, setPassword] = useState('');
+
+  const handleDelete = async () => {
+    if (!navigator.onLine) { setMessage('Connect to the internet before deleting your account.'); return; }
+    setDeleting(true); setMessage('');
+    await onPauseSync();
+    try {
+      await deleteCurrentAccount(password);
+      onClearData(); onClose();
+    } catch {
+      setMessage('Deletion could not finish. Check your password and connection, then retry. If you previously used social sign-in, use Forgot password to set an email password first. Some cloud records may already have been removed.');
+    } finally { onResumeSync(); setDeleting(false); }
+  };
 
   if (!isOpen) return null;
 
-  const isAdmin = currentUser.role === 'admin' || (currentUser.email && currentUser.email.toLowerCase() === 'donatasgricius123@gmail.com');
+  const isAdmin = currentUser.role === 'admin';
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -55,6 +76,7 @@ export default function AccountModal({
       setTimeout(() => setSyncSuccess(false), 3500);
     } catch (e) {
       console.error(e);
+      setMessage('Sync did not finish. Your local history is still available. Please try again.');
     } finally {
       setIsSyncing(false);
     }
@@ -63,11 +85,13 @@ export default function AccountModal({
   const handleLogout = async () => {
     soundFx.playBoop(400);
     try {
+      await onPauseSync(false);
       await logOutUser();
       onSignOut();
       onClose();
     } catch (e) {
       console.error(e);
+      onResumeSync(); setMessage('Sign out failed. Please try again.');
     }
   };
 
@@ -75,10 +99,10 @@ export default function AccountModal({
 
   return (
     <div
-      id="account-modal-backdrop"
+      id="account-modal-backdrop" role="dialog" aria-modal="true" aria-label="Account"
       className="fixed inset-0 z-50 bg-stone-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!deleting && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -112,7 +136,8 @@ export default function AccountModal({
             </div>
             <button
               id="account-close-btn"
-              onClick={onClose}
+              disabled={deleting}
+              onClick={onClose} aria-label="Close"
               className="w-8 h-8 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-white transition-colors"
             >
               <X className="w-4 h-4" />
@@ -142,7 +167,7 @@ export default function AccountModal({
             <button
               id="account-sync-now-btn"
               type="button"
-              disabled={isSyncing}
+              disabled={isSyncing || deleting}
               onClick={handleSync}
               className="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-100/70 border border-emerald-300 text-emerald-800 text-[11px] font-bold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
             >
@@ -171,7 +196,7 @@ export default function AccountModal({
               <div>
                 <h5 className="font-bold text-stone-900 text-sm">{dogProfile.name || 'Unnamed Pup'}</h5>
                 <p className="text-xs text-stone-500">
-                  {dogProfile.breed || 'Dog'} • {dogProfile.size} size • {dogProfile.streakCount || 1} day streak
+                  {dogProfile.breed || 'Dog'} • {dogProfile.size} size • {dogProfile.streakCount || 0} day streak
                 </p>
               </div>
             </div>
@@ -185,7 +210,7 @@ export default function AccountModal({
             </div>
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
               <p className="text-[10px] uppercase tracking-wider font-bold text-stone-400">Streak</p>
-              <p className="text-lg font-black text-orange-600">{dogProfile.streakCount || 1}d</p>
+              <p className="text-lg font-black text-orange-600">{dogProfile.streakCount || 0}d</p>
             </div>
             <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
               <p className="text-[10px] uppercase tracking-wider font-bold text-stone-400">Login</p>
@@ -220,10 +245,24 @@ export default function AccountModal({
             </div>
           )}
 
+          <div className="space-y-3 border-t pt-4">
+            {message && <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-950">{message}</p>}
+            <button disabled={deleting} className="text-sm underline block" onClick={() => { onImportGuest(); setMessage('Guest history from this device has been copied into this account.'); }}>Import this device's guest history</button>
+            <button disabled={deleting} className="text-sm underline block" onClick={() => void verifyEmail().then(() => setMessage('Verification email sent. Follow its link, then sign in again.')).catch(() => setMessage('Could not send a verification email. Please try again later.'))}>Verify my email</button>
+            <a href="/privacy.html" target="_blank" rel="noreferrer" className="text-sm underline">Privacy & your data</a>
+            {!confirmDelete ? <button disabled={deleting} className="text-sm text-red-700 underline block" onClick={() => setConfirmDelete(true)}>Delete account and cloud data</button>
+              : <div className="rounded-xl border border-red-200 p-3 space-y-3 text-sm">
+                <p>This permanently removes your account, cloud dog profile and play history, and this account's saved data on this device. Guest history and exported files remain. This cannot be undone.</p>
+                <label className="block">Confirm your password<input className="form-input" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+                <button disabled={deleting || !password || isSyncing} className="bg-red-700 text-white rounded-xl p-3 disabled:opacity-50" onClick={() => void handleDelete()}>{deleting ? 'Deleting…' : 'Permanently delete my account'}</button>
+                <button disabled={deleting} className="ml-3 underline" onClick={() => { setConfirmDelete(false); setPassword(''); }}>Cancel</button>
+              </div>}
+          </div>
           {/* Sign Out Button */}
           <div className="pt-2">
             <button
               id="account-signout-btn"
+              disabled={deleting}
               type="button"
               onClick={handleLogout}
               className="w-full py-2.5 px-4 rounded-2xl border border-stone-200 hover:bg-rose-50 hover:border-rose-200 text-stone-600 hover:text-rose-700 text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-98"
